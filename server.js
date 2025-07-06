@@ -1,28 +1,28 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const app = express();
-const port = 3000;
+const cookieParser = require('cookie-parser');
 
-// ← 万一のエラーをログに出す
+const app = express();
+const port = process.env.PORT || 3000;
+
+// エラーログ出力
 process.on('uncaughtException', console.error);
 
 const imageRoot = path.join(__dirname, 'images');
+const AUTH_KEY = process.env.AUTH_KEY || "default123"; // ← Render環境変数対応
 
-const cookieParser = require('cookie-parser');
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: false }));
 
-const AUTH_KEY = "abc123"; // ← 任意のパスコードに変更してOK
-
-// 保護ルートの前に: Cookie認証
+// 認証ミドルウェア
 app.use((req, res, next) => {
   if (req.path === '/login' || req.path === '/login_check' || req.path.startsWith('/images')) {
-    return next(); // ログイン画面と画像は許可
+    return next(); // ログイン画面と画像フォルダは通過
   }
   const cookie = req.cookies.auth;
   if (cookie === AUTH_KEY) {
-    return next(); // 通過OK
+    return next();
   } else {
     return res.redirect('/login');
   }
@@ -32,16 +32,14 @@ app.use((req, res, next) => {
 app.use('/images', express.static(imageRoot));
 app.use(express.static(__dirname));
 
-// 🔧 ファイル名から (数字) を抽出して数値ソートに使う
+// 数値ソート用の抽出
 function extractNumber(filename) {
   const match = filename.match(/\((\d+)\)/);
   return match ? parseInt(match[1], 10) : 0;
 }
 
-// 🔸 トップページ：漫画表紙一覧
+// トップ：漫画表紙一覧
 app.get('/', (req, res) => {
-  console.log("★★ / にアクセスされた ★★");
-
   const folders = fs.readdirSync(imageRoot, { withFileTypes: true })
     .filter(dirent => dirent.isDirectory())
     .map(dirent => dirent.name);
@@ -56,9 +54,6 @@ app.get('/', (req, res) => {
       ? `/images/${encodeURIComponent(folder)}/${encodeURIComponent(files[0])}`
       : null;
 
-    // デバッグ出力
-    console.log(`[LINK] /gallery?title=${encodeURIComponent(folder)}`);
-
     return { title: folder, thumbnail };
   });
 
@@ -66,27 +61,17 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html lang="ja">
     <head>
-      <meta charset="UTF-8">
-      <title>漫画一覧</title>
+      <meta charset="UTF-8"><title>漫画一覧</title>
       <style>
         body { font-family: sans-serif; background: #f2f2f2; padding: 2em; }
         h1 { text-align: center; }
         .gallery { display: flex; flex-wrap: wrap; gap: 1.5em; justify-content: center; }
         .item { width: 160px; text-align: center; }
         .item img {
-          width: 100%;
-          height: auto;
-          border: 1px solid #ccc;
-          border-radius: 8px;
-          background: white;
+          width: 100%; height: auto;
+          border: 1px solid #ccc; border-radius: 8px; background: white;
         }
-        .item a {
-          text-decoration: none;
-          color: #333;
-          font-size: 1em;
-          display: block;
-          margin-top: 0.5em;
-        }
+        .item a { text-decoration: none; color: #333; font-size: 1em; display: block; margin-top: 0.5em; }
       </style>
     </head>
     <body>
@@ -106,15 +91,13 @@ app.get('/', (req, res) => {
     </body>
     </html>
   `;
-
   res.send(html);
 });
 
-// 🔸 ギャラリーページ：1作品の画像一覧
+// ギャラリーページ
 app.get('/gallery', (req, res) => {
   const title = req.query.title;
   const dirPath = path.join(imageRoot, title);
-
   if (!fs.existsSync(dirPath)) {
     return res.status(404).send('フォルダが存在しません');
   }
@@ -123,32 +106,19 @@ app.get('/gallery', (req, res) => {
     .filter(f => /\.(avif|jpg|jpeg|png|webp)$/i.test(f))
     .sort((a, b) => extractNumber(a) - extractNumber(b));
 
-  console.log(`📂 /gallery ${title} → ファイル数: ${files.length}`);
-
   const html = `
     <!DOCTYPE html>
     <html lang="ja">
     <head>
-      <meta charset="UTF-8">
-      <title>${title} - サムネイル一覧</title>
+      <meta charset="UTF-8"><title>${title} - サムネイル一覧</title>
       <style>
         body { font-family: sans-serif; background: #fff; padding: 2em; }
         h1 { text-align: center; }
-        .thumbs {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 1em;
-          justify-content: center;
-        }
-        .thumb {
-          width: 120px;
-          cursor: pointer;
-        }
+        .thumbs { display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; }
+        .thumb { width: 120px; cursor: pointer; }
         .thumb img {
-          width: 100%;
-          height: auto;
-          border: 1px solid #aaa;
-          border-radius: 4px;
+          width: 100%; height: auto;
+          border: 1px solid #aaa; border-radius: 4px;
         }
       </style>
     </head>
@@ -166,11 +136,10 @@ app.get('/gallery', (req, res) => {
     </body>
     </html>
   `;
-
   res.send(html);
 });
 
-// 🔸 viewer.html 用：ファイル一覧(JSON)
+// JSON形式のファイルリスト
 app.get('/list', (req, res) => {
   const title = req.query.title;
   if (!title) return res.status(400).json({ error: 'title is required' });
@@ -185,22 +154,24 @@ app.get('/list', (req, res) => {
   res.json(files);
 });
 
-// ログインページ
+// ログイン画面
 app.get('/login', (req, res) => {
   res.send(`
     <!DOCTYPE html>
-    <html lang="ja"><head><meta charset="UTF-8"><title>ログイン</title></head>
+    <html lang="ja">
+    <head><meta charset="UTF-8"><title>ログイン</title></head>
     <body>
       <h1>端末認証</h1>
       <form method="POST" action="/login_check">
         <input name="key" type="password" placeholder="パスコード">
         <button type="submit">認証</button>
       </form>
-    </body></html>
+    </body>
+    </html>
   `);
 });
 
-// ログイン確認処理
+// ログイン処理
 app.post('/login_check', (req, res) => {
   const key = req.body.key;
   if (key === AUTH_KEY) {
@@ -211,7 +182,7 @@ app.post('/login_check', (req, res) => {
   }
 });
 
-// 🔸 サーバー起動
+// サーバー起動
 app.listen(port, () => {
   console.log(`✅ Server running at http://localhost:${port}`);
 });
