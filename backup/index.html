@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>漫画一覧</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2em;
+      background-color: #f2f2f2;
+    }
+    h1 {
+      text-align: center;
+    }
+    .title-list {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .title-list a {
+      display: block;
+      margin: 1em;
+      font-size: 1.5em;
+      text-decoration: none;
+      color: #0077cc;
+      border: 1px solid #0077cc;
+      padding: 0.5em 1em;
+      border-radius: 8px;
+      background-color: white;
+    }
+    .title-list a:hover {
+      background-color: #e0f0ff;
+    }
+  </style>
+</head>
+<body>
+  <h1>漫画一覧</h1>
+  <div class="title-list">
+    <a href="viewer.html?title=漫画A">漫画A</a>
+    <a href="viewer.html?title=漫画B">漫画B</a>
+    <a href="viewer.html?title=漫画C">漫画C</a>
+  </div>
+</body>
+</html>
