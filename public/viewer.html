@@ -2,16 +2,16 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>画像ビューア</title>
-  <script src="auth.js"></script>
+  <title>漫画ビューア</title>
   <style>
     body {
-      background: #000;
       margin: 0;
+      background: black;
       display: flex;
       flex-direction: column;
       align-items: center;
       height: 100vh;
+      cursor: pointer;
       color: white;
       font-family: sans-serif;
     }
@@ -29,7 +29,10 @@
     img {
       max-width: 100%;
       max-height: 100%;
-      object-fit: contain;
+    }
+    #endMessage {
+      font-size: 2rem;
+      display: none;
     }
     .image-container {
       flex: 1;
@@ -41,27 +44,58 @@
   </style>
 </head>
 <body>
+
   <div class="top-bar">
     <a id="backLink" href="#">← サムネ一覧に戻る</a>
   </div>
+
   <div class="image-container">
-    <img id="mainImage" src="" alt="Loading...">
+    <img id="comic" src="" alt="漫画ページ">
+    <div id="endMessage">おしまい</div>
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    const title = params.get('title');
-    const index = parseInt(params.get('index') || '0');
+    const params = new URLSearchParams(window.location.search);
+    const title = params.get('title') || '漫画A';
+    let currentIndex = parseInt(params.get('index')) || 0;
 
-    document.getElementById('backLink').href = `/gallery?title=${encodeURIComponent(title)}`;
+    const image = document.getElementById('comic');
+    const endMessage = document.getElementById('endMessage');
+    const backLink = document.getElementById('backLink');
+    backLink.href = `/gallery?title=${encodeURIComponent(title)}`;
+
+    let fileList = [];
 
     fetch(`/list?title=${encodeURIComponent(title)}`)
       .then(res => res.json())
       .then(files => {
-        const file = files[index];
-        document.getElementById('mainImage').src =
-          `/images/${encodeURIComponent(title)}/${encodeURIComponent(file)}`;
+        if (!files || files.length === 0) {
+          endMessage.textContent = '画像が見つかりません';
+          endMessage.style.display = 'block';
+          return;
+        }
+
+        fileList = files;
+        showImage();
+
+        document.body.addEventListener('click', (e) => {
+          // ページの左右クリックによる前後移動（拡張も可能）
+          currentIndex++;
+          if (currentIndex >= fileList.length) {
+            image.style.display = 'none';
+            endMessage.style.display = 'block';
+          } else {
+            showImage();
+          }
+        });
       });
+
+    function showImage() {
+      image.style.display = 'block';
+      endMessage.style.display = 'none';
+      image.src = `/images/${encodeURIComponent(title)}/${encodeURIComponent(fileList[currentIndex])}`;
+    }
   </script>
+
 </body>
 </html>
