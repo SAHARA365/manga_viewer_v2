@@ -8,51 +8,26 @@
       margin: 0;
       background: black;
       display: flex;
-      flex-direction: column;
+      justify-content: center;
       align-items: center;
       height: 100vh;
       cursor: pointer;
-      color: white;
-      font-family: sans-serif;
-    }
-    .top-bar {
-      width: 100%;
-      padding: 10px;
-      background: #111;
-      text-align: left;
-    }
-    .top-bar a {
-      color: #0af;
-      text-decoration: none;
-      font-size: 1rem;
     }
     img {
       max-width: 100%;
       max-height: 100%;
     }
     #endMessage {
+      color: white;
       font-size: 2rem;
       display: none;
-    }
-    .image-container {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 100%;
     }
   </style>
 </head>
 <body>
 
-  <div class="top-bar">
-    <a id="backLink" href="#">← サムネ一覧に戻る</a>
-  </div>
-
-  <div class="image-container">
-    <img id="comic" src="" alt="漫画ページ">
-    <div id="endMessage">おしまい</div>
-  </div>
+  <img id="comic" src="" alt="漫画ページ">
+  <div id="endMessage">おしまい</div>
 
   <script>
     const params = new URLSearchParams(window.location.search);
@@ -61,9 +36,6 @@
 
     const image = document.getElementById('comic');
     const endMessage = document.getElementById('endMessage');
-    const backLink = document.getElementById('backLink');
-    backLink.href = `/gallery?title=${encodeURIComponent(title)}`;
-
     let fileList = [];
 
     fetch(`/list?title=${encodeURIComponent(title)}`)
@@ -78,8 +50,7 @@
         fileList = files;
         showImage();
 
-        document.body.addEventListener('click', (e) => {
-          // ページの左右クリックによる前後移動（拡張も可能）
+        document.body.addEventListener('click', () => {
           currentIndex++;
           if (currentIndex >= fileList.length) {
             image.style.display = 'none';
@@ -93,7 +64,7 @@
     function showImage() {
       image.style.display = 'block';
       endMessage.style.display = 'none';
-      image.src = `/images/${encodeURIComponent(title)}/${encodeURIComponent(fileList[currentIndex])}`;
+      image.src = `/images/${title}/${encodeURIComponent(fileList[currentIndex])}`;
     }
   </script>
 

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>漫画ビューア</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      cursor: pointer;
+    }
+    img {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    #endMessage {
+      color: white;
+      font-size: 2rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <img id="comic" src="" alt="漫画ページ">
+  <div id="endMessage">おしまい</div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const title = params.get('title') || '漫画A';
+    let currentIndex = parseInt(params.get('index')) || 0;
+
+    const image = document.getElementById('comic');
+    const endMessage = document.getElementById('endMessage');
+    let fileList = [];
+
+    fetch(`/list?title=${encodeURIComponent(title)}`)
+      .then(res => res.json())
+      .then(files => {
+        if (!files || files.length === 0) {
+          endMessage.textContent = '画像が見つかりません';
+          endMessage.style.display = 'block';
+          return;
+        }
+
+        fileList = files;
+        showImage();
+
+        document.body.addEventListener('click', () => {
+          currentIndex++;
+          if (currentIndex >= fileList.length) {
+            image.style.display = 'none';
+            endMessage.style.display = 'block';
+          } else {
+            showImage();
+          }
+        });
+      });
+
+    function showImage() {
+      image.style.display = 'block';
+      endMessage.style.display = 'none';
+      image.src = `/images/${title}/${encodeURIComponent(fileList[currentIndex])}`;
+    }
+  </script>
+
+</body>
+</html>
