@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>漫画一覧</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    #search-box {
+      margin-bottom: 20px;
+    }
+    .comic {
+      display: inline-block;
+      width: 180px;
+      margin: 10px;
+      text-align: center;
+    }
+    .comic img {
+      width: 100%;
+      height: auto;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #comics-container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>漫画一覧</h1>
+
+  <div id="search-box">
+    <input type="text" id="search-input" placeholder="タグ または 作者名で検索" style="width: 300px; padding: 6px;">
+  </div>
+
+  <div id="comics-container"></div>
+
+  <script>
+    const comicsContainer = document.getElementById("comics-container");
+    const searchInput = document.getElementById("search-input");
+
+    let metadata = {};
+
+    fetch("/metadata.json")
+      .then(res => res.json())
+      .then(data => {
+        metadata = data;
+        showComics(); // 初期表示
+      });
+
+    function showComics(filter = "") {
+      comicsContainer.innerHTML = "";
+
+      Object.entries(metadata).forEach(([folder, info]) => {
+        const allTags = [info.author, ...(info.tags || [])].join(" ").toLowerCase();
+        if (filter && !allTags.includes(filter.toLowerCase())) return;
+
+        const comicDiv = document.createElement("div");
+        comicDiv.className = "comic";
+
+        const img = document.createElement("img");
+        img.alt = info.title || folder;
+        img.src = ""; // 後でfetchで設定
+        img.onclick = () => {
+          location.href = `comic.html?title=${encodeURIComponent(folder)}`;
+        };
+
+        // サーバーにcover画像を問い合わせ
+        fetch(`/api/cover-image?title=${encodeURIComponent(folder)}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data && data.cover) {
+              img.src = data.cover;
+            } else {
+              img.src = "/images/default.jpg"; // フォールバック
+            }
+          })
+          .catch(() => {
+            img.src = "/images/default.jpg";
+          });
+
+        const title = document.createElement("div");
+        title.textContent = info.title || folder;
+
+        comicDiv.appendChild(img);
+        comicDiv.appendChild(title);
+        comicsContainer.appendChild(comicDiv);
+      });
+    }
+
+    // 検索イベント
+    searchInput.addEventListener("input", () => {
+      const query = searchInput.value.trim();
+      showComics(query);
+    });
+  </script>
+</body>
+</html>

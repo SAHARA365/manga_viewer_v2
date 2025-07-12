@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>漫画一覧</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #search-box { margin-bottom: 20px; }
+    .comic { display: inline-block; width: 180px; margin: 10px; text-align: center; }
+    .comic img { width: 100%; height: auto; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
+    #comics-container { display: flex; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>漫画一覧</h1>
+  <div id="search-box">
+    <input type="text" id="search-input" placeholder="タグ または 作者名で検索" style="width:300px; padding:6px;">
+  </div>
+  <div id="comics-container"></div>
+
+  <script>
+    const container = document.getElementById('comics-container');
+    const searchInput = document.getElementById('search-input');
+    let metadata = {};
+
+    fetch('/metadata.json')
+      .then(r => r.json())
+      .then(data => { metadata = data; showComics(); });
+
+    function showComics(filter = '') {
+      container.innerHTML = '';
+      Object.entries(metadata).forEach(([folder, info]) => {
+        const tags = [info.author, ...(info.tags || [])].join(' ').toLowerCase();
+        if (filter && !tags.includes(filter.toLowerCase())) return;
+
+        const div = document.createElement('div');
+        div.className = 'comic';
+
+        const img = document.createElement('img');
+        img.alt = info.title || folder;
+        fetch(`/api/cover-image?title=${encodeURIComponent(folder)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => img.src = data?.cover || '/images/default.jpg')
+          .catch(() => img.src = '/images/default.jpg');
+
+        img.onclick = () => {
+          location.href = `comic.html?title=${encodeURIComponent(folder)}`;
+        };
+
+        const titleDiv = document.createElement('div');
+        titleDiv.textContent = info.title || folder;
+
+        div.append(img, titleDiv);
+        container.append(div);
+      });
+    }
+
+    searchInput.addEventListener('input', () => {
+      showComics(searchInput.value.trim());
+    });
+  </script>
+</body>
+</html>

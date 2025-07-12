@@ -1,0 +1,318 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const cookieParser = require('cookie-parser');
+
+const app = express();
+const port = process.env.PORT || 3000;
+const imageRoot = path.join(__dirname, 'images');
+const AUTH_KEY = process.env.AUTH_KEY || "default123";
+
+// 数値抽出（例：「画像 (2).avif」から 2 を取り出して数値ソート）
+function extractNumber(filename) {
+  const match = filename.match(/\((\d+)\)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+// HTMLエスケープ（検索欄に反映する用）
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[m]));
+}
+
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json()); // JSONボディパース追加
+
+// 認証ミドルウェア（images と login 関連を除いて保護）
+app.use((req, res, next) => {
+  if (req.path === '/login' || req.path === '/login_check' || req.path.startsWith('/images')) {
+    return next();
+  }
+  const cookie = req.cookies.auth;
+  if (cookie === AUTH_KEY) {
+    return next();
+  } else {
+    return res.redirect('/login');
+  }
+});
+
+// 静的ファイル配信
+app.use('/images', express.static(imageRoot));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// トップ：漫画表紙一覧 + 検索
+app.get('/', (req, res) => {
+  const search = (req.query.q || "").trim().toLowerCase();
+
+  let metadata = {};
+  try {
+    metadata = JSON.parse(fs.readFileSync(path.join(__dirname, "public", "metadata.json"), "utf-8"));
+  } catch (e) {
+    console.warn("metadata.json 読み込み失敗:", e.message);
+  }
+
+  const folders = fs.readdirSync(imageRoot, { withFileTypes: true })
+    .filter(dirent => dirent.isDirectory())
+    .map(dirent => dirent.name);
+
+  const folderEntries = folders.map(folder => {
+    const folderPath = path.join(imageRoot, folder);
+    const files = fs.readdirSync(folderPath)
+      .filter(f => /\.(avif|jpg|jpeg|png|webp)$/i.test(f))
+      .sort((a, b) => extractNumber(a) - extractNumber(b));
+
+    const thumbnail = files.length > 0
+      ? `/images/${encodeURIComponent(folder)}/${encodeURIComponent(files[0])}`
+      : null;
+
+    const meta = metadata[folder] || {};
+    const text = [meta.title, meta.author, ...(meta.tags || [])].join(" ").toLowerCase();
+
+    return { folder, title: meta.title || folder, thumbnail, text };
+  }).filter(entry => !search || entry.text.includes(search));
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8"><title>漫画一覧</title>
+      <style>
+        body { font-family: sans-serif; background: #f2f2f2; padding: 2em; }
+        h1 { text-align: center; }
+        form { text-align: center; margin-bottom: 1em; }
+        input[type="text"] {
+          padding: 6px 12px;
+          font-size: 16px;
+          width: 300px;
+        }
+        .gallery { display: flex; flex-wrap: wrap; gap: 1.5em; justify-content: center; }
+        .item { width: 160px; text-align: center; }
+        .item img {
+          width: 100%; height: auto;
+          border: 1px solid #ccc; border-radius: 8px; background: white;
+        }
+        .item a { text-decoration: none; color: #333; font-size: 1em; display: block; margin-top: 0.5em; }
+      </style>
+    </head>
+    <body>
+      <h1>漫画一覧</h1>
+      <form method="GET" action="/">
+        <input type="text" name="q" placeholder="作者名やジャンルで検索" value="${escapeHtml(req.query.q || "")}">
+      </form>
+      <div class="gallery">
+        ${folderEntries.map(entry => `
+          <div class="item">
+            <a href="/gallery?title=${encodeURIComponent(entry.folder)}">
+              ${entry.thumbnail
+                ? `<img src="${entry.thumbnail}" alt="${entry.title}">`
+                : '<div style="width:100%;height:200px;background:#ddd;"></div>'}
+              <span>${entry.title}</span>
+            </a>
+          </div>
+        `).join('')}
+      </div>
+    </body>
+    </html>
+  `;
+  res.send(html);
+});
+
+// ログイン画面
+app.get('/login', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head><meta charset="UTF-8"><title>ログイン</title></head>
+    <body>
+      <h1>端末認証</h1>
+      <form method="POST" action="/login_check">
+        <input name="key" type="password" placeholder="パスコード">
+        <button type="submit">認証</button>
+      </form>
+    </body>
+    </html>
+  `);
+});
+
+// ログイン処理
+app.post('/login_check', (req, res) => {
+  const key = req.body.key;
+  if (key === AUTH_KEY) {
+    res.cookie('auth', AUTH_KEY, { httpOnly: true });
+    res.redirect('/');
+  } else {
+    res.send('<h1>パスコードが間違っています</h1><a href="/login">戻る</a>');
+  }
+});
+
+app.get('/gallery', (req, res) => {
+  const title = req.query.title;
+  if (!title) {
+    return res.status(400).send('タイトルを指定してください');
+  }
+  const dirPath = path.join(imageRoot, title);
+  if (!fs.existsSync(dirPath)) {
+    return res.status(404).send('フォルダが存在しません');
+  }
+
+  const files = fs.readdirSync(dirPath)
+    .filter(f => /\.(avif|jpg|jpeg|png|webp)$/i.test(f))
+    .sort((a, b) => extractNumber(a) - extractNumber(b));
+
+  let metadata = {};
+  try {
+    metadata = JSON.parse(fs.readFileSync(path.join(__dirname, "public", "metadata.json"), "utf-8"));
+  } catch (e) {
+    console.warn("metadata.json 読み込み失敗:", e.message);
+  }
+
+  const tags = metadata[title]?.tags || [];
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <title>${escapeHtml(title)} - サムネイル一覧</title>
+      <style>
+        body { font-family: sans-serif; background: #fff; padding: 2em; }
+        h1 { text-align: center; }
+        .thumbs { display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; }
+        .thumb { width: 120px; cursor: pointer; }
+        .thumb img {
+          width: 100%; height: auto;
+          border: 1px solid #aaa; border-radius: 4px;
+        }
+        #tag-section {
+          margin-top: 30px;
+          text-align: center;
+        }
+        #tag-list span {
+          display: inline-block;
+          margin: 4px;
+          padding: 5px 10px;
+          background-color: #e0e0e0;
+          border-radius: 12px;
+          cursor: pointer;
+          user-select: none;
+        }
+        #new-tag {
+          margin-top: 15px;
+          padding: 6px;
+          font-size: 1em;
+          width: 200px;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>${escapeHtml(title)}</h1>
+
+      <div id="tag-section">
+        <h3>タグ編集</h3>
+        <div id="tag-list">
+          ${tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}
+        </div>
+        <input type="text" id="new-tag" placeholder="タグ追加 (Enterで登録)">
+      </div>
+
+      <div class="thumbs">
+        ${files.map((file, idx) => `
+          <div class="thumb">
+            <a href="viewer.html?title=${encodeURIComponent(title)}&index=${idx}">
+              <img src="/images/${encodeURIComponent(title)}/${encodeURIComponent(file)}" alt="page ${idx + 1}">
+            </a>
+          </div>
+        `).join('')}
+      </div>
+
+      <script>
+        const tagList = document.getElementById('tag-list');
+        const newTagInput = document.getElementById('new-tag');
+
+        function saveTagsToServer() {
+          const tags = Array.from(tagList.children).map(span => span.textContent);
+          fetch('/update-metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: ${JSON.stringify(title)}, tags })
+          })
+          .then(res => {
+            if (!res.ok) throw new Error('保存失敗');
+          })
+          .catch(() => {
+            alert('タグの自動保存に失敗しました');
+          });
+        }
+
+        // タグ削除（クリックで）
+        tagList.addEventListener('click', e => {
+          if (e.target.tagName === 'SPAN') {
+            tagList.addEventListener('click', e => {
+              if (e.target.tagName === 'SPAN') {
+                if (confirm('タグ "' + e.target.textContent + '" を削除しますか？')) {
+                e.target.remove();
+                saveTagsToServer();
+                }
+              }
+            });
+          }
+        });
+
+        // タグ追加（Enterで）
+        newTagInput.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            const val = newTagInput.value.trim();
+            if (val) {
+              const existing = Array.from(tagList.children).some(span => span.textContent === val);
+              if (existing) {
+                alert('同じタグが既にあります。');
+              } else {
+                const span = document.createElement('span');
+                span.textContent = val;
+                tagList.appendChild(span);
+                newTagInput.value = '';
+                saveTagsToServer();
+              }
+            }
+          }
+        });
+      </script>
+    </body>
+    </html>
+  `;
+
+  res.send(html);
+});
+
+// タグ編集内容を保存するAPI
+app.post('/update-metadata', (req, res) => {
+  const { title, tags } = req.body;
+  if (!title || !Array.isArray(tags)) {
+    return res.status(400).send('不正なリクエスト');
+  }
+
+  const metadataPath = path.join(__dirname, 'public', 'metadata.json');
+  let metadata = {};
+  try {
+    metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+  } catch (e) {
+    metadata = {};
+  }
+
+  metadata[title] = metadata[title] || {};
+  metadata[title].tags = tags;
+
+  fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), err => {
+    if (err) {
+      console.error('metadata.json 書き込みエラー:', err);
+      return res.status(500).send('保存エラー');
+    }
+    res.send('保存完了');
+  });
+});
+
+app.listen(port, () => {
+  console.log(`✅ Server running at http://localhost:${port}`);
+});

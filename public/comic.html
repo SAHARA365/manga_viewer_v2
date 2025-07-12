@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>画像一覧</title>
+  <style>
+    body { font-family: sans-serif; }
+    h1 { font-size: 1.5em; }
+    .nav { margin-bottom: 10px; }
+    .grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .grid img {
+      width: 180px;
+      height: 260px;
+      object-fit: cover;
+      cursor: pointer;
+      border: 1px solid #ccc;
+    }
+    .tag-editor {
+      margin-top: 10px;
+    }
+    .tag-editor input {
+      width: 300px;
+      margin-bottom: 10px;
+    }
+    .tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tag-badge {
+      background: #eee;
+      color: #333;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.9em;
+      display: inline-flex;
+      align-items: center;
+    }
+    .tag-badge span {
+      cursor: pointer;
+    }
+    .tag-badge .remove {
+      margin-left: 6px;
+      color: red;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .tag-badge .remove:hover {
+      color: darkred;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">← 表紙一覧に戻る</a>
+  </div>
+
+  <h1 id="title">読み込み中...</h1>
+
+  <div class="tag-editor">
+    <input type="text" id="tagInput" placeholder="タグを入力してEnter">
+    <div class="tags" id="tagList"></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const rawTitle = new URLSearchParams(location.search).get("title") || "";
+    const title = decodeURIComponent(rawTitle);
+    document.getElementById("title").textContent = title || "不明なタイトル";
+
+    let metadata = {};
+
+    async function loadMetadata() {
+      try {
+        const res = await fetch('/metadata.json');
+        metadata = await res.json();
+        updateTagDisplay();
+      } catch {
+        metadata = {};
+      }
+    }
+
+    function updateTagDisplay() {
+      const tags = metadata[title]?.tags || [];
+      const tagList = document.getElementById("tagList");
+      tagList.innerHTML = "";
+
+      tags.forEach(tag => {
+        const span = document.createElement("span");
+        span.className = "tag-badge";
+
+        const label = document.createElement("span");
+        label.textContent = tag;
+        label.addEventListener("click", () => {
+          location.href = `tag_view.html?tag=${encodeURIComponent(tag)}`;
+        });
+
+        const remove = document.createElement("span");
+        remove.textContent = "×";
+        remove.className = "remove";
+        remove.addEventListener("click", async (e) => {
+          e.stopPropagation(); // タグクリックをキャンセル
+          metadata[title].tags = tags.filter(t => t !== tag);
+          updateTagDisplay();
+          await saveTags();
+        });
+
+        span.appendChild(label);
+        span.appendChild(remove);
+        tagList.appendChild(span);
+      });
+    }
+
+    async function saveTags() {
+      const tags = metadata[title]?.tags || [];
+      const res = await fetch('/api/update-tags', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ title, tags })
+      });
+    }
+
+    document.getElementById("tagInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const tag = e.target.value.trim();
+        if (!tag) return;
+
+        metadata[title] = metadata[title] || {};
+        metadata[title].tags = metadata[title].tags || [];
+        if (!metadata[title].tags.includes(tag)) {
+          metadata[title].tags.push(tag);
+          updateTagDisplay();
+          await saveTags();
+        }
+        e.target.value = "";
+      }
+    });
+
+    async function loadImages() {
+      const res = await fetch(`/list?title=${encodeURIComponent(title)}`);
+      if (!res.ok) {
+        document.getElementById("grid").textContent = "画像が読み込めません";
+        return;
+      }
+
+      const images = await res.json();
+      const grid = document.getElementById("grid");
+
+      images.forEach((file, index) => {
+        const img = document.createElement("img");
+        img.src = `/images/${encodeURIComponent(title)}/${encodeURIComponent(file)}`;
+        img.alt = file;
+        img.addEventListener("click", () => {
+          location.href = `viewer.html?title=${encodeURIComponent(title)}&index=${index}`;
+        });
+        grid.appendChild(img);
+      });
+    }
+
+    loadMetadata();
+    loadImages();
+  </script>
+</body>
+</html>

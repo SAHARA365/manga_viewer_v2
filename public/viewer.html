@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ビューア</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #111;
+      color: white;
+      text-align: center;
+      font-family: sans-serif;
+    }
+    .nav {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+    }
+    img {
+      width: 1280px;        /* 必要なら固定幅も可（例：1200px） */
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      object-fit: contain;
+      background: black;
+      cursor: pointer;
+    }
+    #pageInfo {
+      font-size: 0.9em;
+      color: #aaa;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <a href="comic.html?title=" id="backLink" style="color: lightblue;">← 一覧に戻る</a>
+  </div>
+
+  <div id="pageInfo"></div>
+  <div>
+    <img id="image" src="" alt="page" />
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const title = decodeURIComponent(params.get("title") || "");
+    let index = parseInt(params.get("index") || "0", 10);
+
+    const backLink = document.getElementById("backLink");
+    backLink.href = `comic.html?title=${encodeURIComponent(title)}`;
+
+    let images = [];
+
+    async function loadImages() {
+      const res = await fetch(`/list?title=${encodeURIComponent(title)}`);
+      if (!res.ok) {
+        alert("画像が読み込めませんでした");
+        return;
+      }
+      images = await res.json();
+      showImage();
+    }
+
+    function showImage() {
+      if (index < 0) index = 0;
+      if (index >= images.length) index = images.length - 1;
+
+      const file = images[index];
+      const img = document.getElementById("image");
+      img.src = `/images/${encodeURIComponent(title)}/${encodeURIComponent(file)}`;
+
+      document.getElementById("pageInfo").textContent = `${index + 1} / ${images.length} ページ`;
+
+      window.scrollTo(0, 0); // ページ上部に戻す
+    }
+
+    function goNext() {
+      if (index < images.length - 1) {
+        index++;
+        updateURL();
+        showImage();
+      } else {
+        location.href = `comic.html?title=${encodeURIComponent(title)}`;
+      }
+    }
+
+    function goPrev() {
+      if (index > 0) {
+        index--;
+        updateURL();
+        showImage();
+      }
+    }
+
+    function updateURL() {
+      const newURL = `viewer.html?title=${encodeURIComponent(title)}&index=${index}`;
+      history.replaceState(null, "", newURL);
+    }
+
+    document.getElementById("image").addEventListener("click", (e) => {
+      const rect = e.target.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      if (x < rect.width * 0.25) {
+        goPrev();
+      } else {
+        goNext();
+      }
+    });
+
+    loadImages();
+  </script>
+</body>
+</html>

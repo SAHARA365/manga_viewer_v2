@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>タグ検索結果</title>
+  <style>
+    body { font-family: sans-serif; }
+    h1 { font-size: 1.5em; }
+    .gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .item {
+      width: 180px;
+      text-align: center;
+    }
+    .thumb {
+      width: 100%;
+      height: 260px;
+      object-fit: cover;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="heading">タグ: </h1>
+  <div class="gallery" id="gallery"></div>
+
+  <script>
+    const tag = decodeURIComponent(new URLSearchParams(location.search).get("tag") || "");
+    document.getElementById("heading").textContent = `タグ: ${tag}`;
+
+    async function main() {
+      const gallery = document.getElementById("gallery");
+
+      const metadata = await fetch('/metadata.json').then(r => r.json());
+      const matchingTitles = Object.entries(metadata)
+        .filter(([_, data]) => Array.isArray(data.tags) && data.tags.includes(tag))
+        .map(([title]) => title);
+
+      for (const title of matchingTitles) {
+        const res = await fetch(`/api/cover-image?title=${encodeURIComponent(title)}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+          <a href="comic.html?title=${encodeURIComponent(title)}">
+            <img src="${data.cover}" class="thumb">
+          </a>
+          <div>${title}</div>
+        `;
+        gallery.appendChild(div);
+      }
+
+      if (matchingTitles.length === 0) {
+        gallery.innerHTML = "このタグを持つ漫画は見つかりませんでした。";
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
