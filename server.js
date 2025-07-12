@@ -161,6 +161,11 @@ app.post('/login_check', (req, res) => {
   }
 });
 
+// login.html を /login にマッピングするルート
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 app.listen(port, () => {
   console.log(`✅ Server running at http://localhost:${port}`);
 });
