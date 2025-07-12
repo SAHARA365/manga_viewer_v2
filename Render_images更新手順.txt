@@ -9,7 +9,7 @@
 2. 以下のコマンドを順番に実行する：
 
    git add -A
-   git commit -m "全部コミット"
+   git commit -m "コミット内容メモ"
    git push origin main
 
 3. Renderが自動で再デプロイを開始（通常1〜2分かかる）
