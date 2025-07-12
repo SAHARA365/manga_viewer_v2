@@ -150,6 +150,17 @@ app.get('/list', (req, res) => {
   res.json(files);
 });
 
+// ログインチェック
+app.post('/login_check', (req, res) => {
+  const pass = req.body.passcode;
+  if (pass === AUTH_KEY) {
+    res.cookie('auth', AUTH_KEY, { httpOnly: true });
+    res.redirect('/index.html');
+  } else {
+    res.send('認証失敗: パスコードが間違っています');
+  }
+});
+
 app.listen(port, () => {
   console.log(`✅ Server running at http://localhost:${port}`);
 });

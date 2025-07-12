@@ -82,11 +82,22 @@ app.get('/list', (req, res) => {
 // すべての漫画フォルダを返すAPI
 app.get('/api/all-folders', (req, res) => {
   try {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
     const folders = fs.readdirSync(imageRoot, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory())
-      .map(dirent => dirent.name);
+      .filter(function (dirent) {
+        return dirent.isDirectory();
+      })
+      .map(function (dirent) {
+        return dirent.name;
+      })
+      .sort(function (a, b) {
+        return collator.compare(a, b);
+      });
+
     res.json(folders);
   } catch (err) {
+    console.error("Folder listing failed:", err);
     res.status(500).json({ error: 'failed to read image folders' });
   }
 });
@@ -122,6 +133,22 @@ app.post('/api/update-tags', (req, res) => {
   }
 });
 
+// 画像一覧API
+app.get('/list', (req, res) => {
+  const title = req.query.title;
+  const dirPath = path.join(imageRoot, title || '');
+
+  console.log("📂 /list API title:", title);
+  console.log("📁 resolved path:", dirPath);
+
+  if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'not found' });
+
+  const files = fs.readdirSync(dirPath)
+    .filter(f => /\.(avif|jpg|jpeg|png|webp)$/i.test(f))
+    .sort((a, b) => extractNumber(a) - extractNumber(b));
+
+  res.json(files);
+});
 
 app.listen(port, () => {
   console.log(`✅ Server running at http://localhost:${port}`);
